@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+	<meta charset="UTF-8">
+
+	<title>Timeseries Map</title>
+  
+  <!-- External libs (jQuery, Highcharts, PaperJS -->
+  <script src="lib/jquery-2.0.3.min.js"></script>
+  <script src="lib/highcharts.js"></script>
+  <script src="lib/highcharts-more.js"></script>
+	<script src="lib/paper.js"></script>
+  <script src="lib/jquery.mousewheel.js"></script>  
+  <script src="lib/moment.min.js"></script>  
+
+  <!-- Mercator projection lib -->
+  <script src="lib/mercator.js"></script>
+
+  <!-- Data -->
+  <script src="data/maps.js"></script>
+  <script src="data/meters.js"></script>
+  <script src="data/timeseries.js"></script>
+  
+  <!-- App -->
+  <script>
+    $(function() {
+      mercator = new Mercator();
+      index = indices.length - 1;
+      updateDateTime();
+      redraw = true;
+      loop   = false;
+      setTimeout(function(){$('#curtain').fadeOut();}, 14000);
+    });
+
+    function updateDateTime(){
+      var mm = moment(indices[index]);
+      var ts = mm.format("YYYY-MM-DDTHH:mmZ");
+      $('#time').text(mm.format("HH:mm"));
+      $('#date').text(mm.format("DD-MM-YYYY"));
+    }
+    
+    function showIndex(time){
+      var mm = moment(time);
+      var ts = mm.format("YYYY-MM-DDTHH:mmZ");
+      var i = indices.indexOf(ts);
+      index = i;
+      redraw = true;
+      updateDateTime();
+    }
+    
+    function showNextIndex(){
+      index = (++index) % indices.length;
+      redraw = true;
+      updateDateTime();
+    }
+
+    function drawGraph(meter) {
+    
+      $('#graphdiv').show();
+      
+      var graphData = [];
+      var graphColors = [];
+      
+      for(var i in indices){
+        var time  = (new Date(indices[i])).getTime();
+        var value = timeseries[i][meters.indexOf(meter)];
+        graphData.push([time, Math.abs(value)]);
+        var color = (value == 0) ? ( '#eeeeee' ) : (value>0?'#ff0000':'#00ff00');
+        graphColors.push(color);
+      }
+ 
+      $('#graph').highcharts({
+        chart: { type: 'column', zoomType: "x", borderRadius: 1, borderColor: '#000000', borderWidth: 1, backgroundColor: 'white' },
+        plotOptions: { column: { borderWidth: 0, grouping: false, pointPadding: 0, groupPadding: 0, borderWidth: 1, borderColor: '#000000', shadow: false, animation: false, colorByPoint: true, colors: graphColors, groupPadding: 0 } },
+        credits: { enabled: false },
+        legend: { enabled: false },    
+        title: { text: null,},
+        subtitle: { text: null },
+        xAxis: { tickColor: '#000000', lineColor: '#000000', type: 'datetime', title: { text: null }, labels: { enabled: true, style: { color: '#000000', fontWeight: 'normal' } },  gridLineWidth: 0, color: '#000000'},
+        yAxis: { tickColor: '#000000', title: { text: null }, labels: { enabled: true, style: { color: '#000000', fontWeight: 'normal' } }, gridLineWidth: 0 },
+        series: [{ data: graphData, point: { events: { mouseOver: function() { showIndex(this.x) } } } }],
+        tooltip: { animation: false, enabled: false }
+      });
+    };
+          
+  </script>
+    
+	<script type="text/paperscript" canvas="papercanvas">
+      
+    function drawMap(){
+      
+      var group = new Group();
+      
+      for(var i = 0; i < mapdata.length; i++){
+        var path = new Path();
+        //path.dashArray = [4, 2];
+        path.strokeColor = 'black';
+        path.fillColor   = '#eeeeee';
+     
+        for(var j = 0; j < mapdata[i].length; j++){
+          path.add(new Point(mercator.x(mapdata[i][j][1]), mercator.y(mapdata[i][j][0])));
+        }
+        
+        group.addChild(path);
+      }
+      
+      return group;
+    }
+    
+    function drawCircles(){
+    
+      var current = [];
+      for ( meter in meters ){
+        current.push([meters[meter], timeseries[index][meter]]);
+      }
+            
+      current.sort(function(a,b){ return Math.abs(a[1]) < Math.abs(b[1]) ? 1 : (Math.abs(a[1]) > Math.abs(b[1]) ? -1 : 0); });
+    
+      var group = new Group();
+      for (var pair in current){
+        var meter = current[pair][0];
+        //var value = current[pair][1];
+        var lat = metadata[meter].lat;
+        var lon = metadata[meter].lon;
+        var val = timeseries[index][meters.indexOf(meter)];
+        var rad = Math.sqrt(Math.abs(val)/ Math.PI) * 0.02;
+        
+        // export, entry, berging
+        if(metadata[meter].tags.indexOf("berging") != -1){ continue; }
+        
+        var circle = new Path.Circle(new Point(mercator.x(lon), mercator.y(lat)), rad);
+        circle.opacity = 0.9;
+
+        circle.fillColor = val > 0?new Color(1,0,0):new Color(0,1,0);
+        circle.meterID = meter;
+        circle.strokeColor = 'black';
+        circle.strokeWidth = 1;
+        
+        circle.onClick = function(event) { drawGraph(this.meterID); };
+        circle.onMouseEnter = function(event) { showPopup(this); };
+        circle.onMouseLeave = function(event) { hidePopup(this); };
+        
+        group.addChild(circle);
+      }
+      return group;
+    }
+        
+    mercator.width  = view.size.width;
+    mercator.height = view.size.height;
+    
+    mercator.reset();
+    mercator.box.north = 53.554516;
+    mercator.box.east  =  7.29271;
+    mercator.box.south = 50.755173;
+    mercator.box.west  =  3.3718216;
+    mercator.viewbox();
+    
+    var map     = drawMap();
+    var circles = drawCircles();
+    
+    function onMouseUp(event){
+      if(event.delta.zero && (!project.hitTest(event.point) || !project.hitTest(event.point).item.meterID)){
+        $('#graphdiv').hide();
+      }
+    }
+    
+    function onMouseDrag(event) {
+      if(!project.hitTest(event.point) || !project.hitTest(event.point).item.meterID){
+        mercator.offset.x += event.delta.x;
+        mercator.offset.y += event.delta.y;
+        map.position     += event.delta;
+        circles.position += event.delta;
+      }
+    }
+    
+    function onMouseMove(event){
+      $('#popup').css({ left: event.point.x, top: event.point.y });
+    }
+
+    $('#papercanvas')
+        .mousewheel(function(event, delta) {
+            var x = event.clientX;
+            var y = event.clientY;
+            var factor = 1 + (delta / 10);
+            var sign   = factor > 0 ? 1 : -1;
+            mercator.zoom(factor, x * sign, y * sign);
+            redraw = true;
+            return false;
+        });
+    
+    function onFrame(event) {
+ 
+      if(loop){
+        showNextIndex();
+      }
+      
+      if(redraw){
+        mercator.width  = view.viewSize.width; 
+        mercator.height = view.viewSize.height; 
+        map.remove();
+        map = drawMap();
+        circles.remove();
+        circles = drawCircles();
+        highlightCircles();
+        updatePopup();
+        redraw = false;
+      }
+    }
+    
+    // Once pressed
+    function onKeyUp(event) {
+      switch(event.key) {
+        case '0': mercator.viewbox(); redraw = true; break;
+        case 'space': loop = !loop; break;
+      }      
+    }
+
+    // Pressed and hold down
+    function onKeyDown(event) {
+      switch(event.key) {
+        case '-': mercator.zoomcenter(0.9); redraw = true; break;
+        case '=': mercator.zoomcenter(1.1); redraw = true; break;
+      }      
+    }
+    
+    function onResize(event) {
+      mercator.width  = view.size.width;
+      mercator.height = view.size.height;
+      mercator.viewbox(); redraw = true;
+    }
+    
+    function formatkWh(kWh){
+      var unit = "";
+      if(Math.abs(kWh) > 100000) { unit = "GWh"; kWh /= 1000000; }
+      if(Math.abs(kWh) > 1000)   { unit = "MWh"; kWh /= 1000;    }
+      return (kWh.toFixed(1) + " " + unit);
+    }
+    
+    function showPopup(circle){
+      var meter = circle.meterID;
+      circle.strokeColor = 'black';
+      circle.strokeWidth = 2;
+      //circle.dashArray = [10, 4];
+      //circle.opacity = 0.5;
+      if(metadata[meter]){
+        $('#meter').text(metadata[meter].id);
+        $('#name').text(metadata[meter].name);
+        $('#tags').text(metadata[meter].tags);
+        $('#volume').text(formatkWh(timeseries[index][meters.indexOf(meter)]));     
+        $('#popup').show();
+      }
+    }
+
+    function updatePopup(){
+      var meter = $('#meter').text();
+      if(metadata[meter]){
+        $('#meter').text(metadata[meter].id);
+        $('#name').text(metadata[meter].name);
+        $('#volume').text(formatkWh(timeseries[index][meters.indexOf(meter)]));     
+      }
+    }
+
+    function hidePopup(circle){
+      circle.strokeColor = 'black';
+      circle.strokeWidth = 1;
+      circle.dashArray = null;
+      $('#popup').hide();
+    }
+
+    function highlightCircles(){
+      var text = $('#searchtext').val();
+      for(var n in circles.children){
+        var circle = circles.children[n];
+        if(text == ""){
+          circle.opacity = 0.9;
+        } else {
+          var meter = circle.meterID;
+          var meta  = metadata[meter];
+          var rgx   = new RegExp(text,"gi");
+          var match =          rgx.test(meta.id);
+          var match = match || rgx.test(meta.name);
+          var match = match || rgx.test(meta.place);
+          var match = match || rgx.test(meta.tags);
+          if(match){
+            circle.opacity = 0.9;
+          } else {
+            circle.opacity = 0.1;
+          }
+        }
+      }      
+    }
+
+    $('#searchtext').on('input', highlightCircles);
+       
+	</script>
+    
+</head>
+  <body style='margin: 0; overflow: hidden; font-family: "Segoe UI", "Optima", "Futura", "Helvetica", sans-serif;'>
+      
+    <div id="side" style="position: absolute; left: 40px; top: 40px; width: 200px; min-height: 100px; opacity: 0.9; background: white; border-radius: 0px; border: 1px solid black;">
+      <div id="time" style="margin-top: 20px; font-size: 32pt; text-align: center; ">time</div>
+      <div id="date" style="margin-bottom: 20px; font-weight: bold; font-size: 13pt; text-align: center; ">date</div>
+      <div id="search" style="text-align: center; margin: 20px;">
+        <input id="searchtext" name="searchtext" type="search" placeholder="Search..." autofocus>
+      </div>
+    </div>
+    
+    <div id="popup" style="display: none; position: absolute; background: white; opacity: 0.9; border-radius: 0px; margin: 20px; box-shadow: 1px 1px 10px #888888; box-shadow: none; border: 1px solid black;">
+      <div id="name"   style="margin: 10px; font-weight: bold; font-size: 11pt; text-align: center; ">name</div>
+      <div id="volume" style="margin: 8px; font-size: 13pt; text-align: center; ">volume</div>
+      <div id="meter"  style="margin: 8px; font-size: 9pt; text-align: center; color: grey;">meter</div>
+      <div id="tags"   style="margin: 8px; margin-bottom: 10px; font-size: 9pt; text-align: center; color: grey;">tags</div>
+    </div>
+
+    <div id="graphdiv" style="display: none; position: absolute; width: 100%; bottom: 0; opacity: 0.9;">
+      <div id="graph" style="position: relative; height: 80px; margin-left: 40px; margin-right: 40px; margin-bottom: 20px; ">graph</div>
+    </div>
+    <canvas id="papercanvas" resize></canvas>
+
+
+  </body>
+</html>
