@@ -3,7 +3,7 @@ GeoDataMap
 
 *Interact with Timeseries Data on a Geographic Vector Map*
 
-![Alt text](/path/to/img.jpg "Optional title")
+![Screenshot of GeoDataMap](doc/screenshot.png "Screenshot of GeoDataMap")
 
 Features
 --------
