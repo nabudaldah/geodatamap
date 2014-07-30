@@ -10,7 +10,7 @@ Features
 
 I've build this for demo purposes at work. We work with a lot of energy related data and this was my ideal way of visualizing and accessing real-time data coming into the system.
 
- 1. Modular design using [Paper.js](http://example.com) and [JQuery](http://jquery.com) and [Moment.js](http://momentjs.com)
+ 1. Modular design using [Paper.js](http://paperjs.org) and [JQuery](http://jquery.com) and [Moment.js](http://momentjs.com)
  2. Easy to understand and customize
  3. Stand-alone for demo's and own projects!
 
