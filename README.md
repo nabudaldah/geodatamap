@@ -5,6 +5,8 @@ GeoDataMap
 
 ![Screenshot of GeoDataMap](doc/screenshot.png "Screenshot of GeoDataMap")
 
+**Data source:** <http://www.gasunietransportservices.nl/transportinformatie/dataport>
+
 Features
 --------
 
