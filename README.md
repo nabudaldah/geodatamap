@@ -30,3 +30,7 @@ Just clone the whole repository locally and open index.html!
  3. Press space to loop through time
  4. Hover the appearing barchart to relocate in time
  5. Search any timeseries using the searchbox
+
+*Here is a animation showing GeoDataMap:*
+
+![Screencapture of GeoDataMap](doc/screencapture.gif)
